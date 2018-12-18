@@ -2,6 +2,7 @@ import json
 import sqltokenizer
 import os
 import csv
+from Schema import Schema
 
 
 # text =  r"""create table if not exists movies (title varchar, year int, duration int, score float);"""
@@ -80,7 +81,7 @@ def select(command):
 
     arg_list = []
     table_name = ""
-    outfile = ""
+    outfile = None
 
     while True:
         tok, val = tokenizer.next_token()
@@ -104,12 +105,36 @@ def select(command):
         if tok == sqltokenizer.SqlTokenKind.EOF:
             break
 
-    schema = []
-    with open(os.path.join(table_name, "table.json"), "r") as f:
-        schema = json.load(f)["schema"]
-
+    schema = Schema(os.path.join(table_name, "table.json"))
     if arg_list == ["*"]:
-        arg_list = [arg["field"] for arg in schema]
+        arg_list = schema.get_all_field_names()
+    arg_list_index = [schema.get_field_index(arg) for arg in arg_list]
+
+    with open(os.path.join(table_name, table_name + ".csv")) as table:
+        reader = csv.reader(table)
+        if outfile is None:
+            for row in reader:
+                row = [row[i] for i in range(len(row)) if i in arg_list_index]
+                print(",".join(row))
+        else:
+            with open(outfile, "w") as out_csv:
+                writer = csv.writer(out_csv)
+                for row in reader:
+                    row = [row[i] for i in range(len(row)) if i in arg_list_index]
+                    writer.writerow(row)
 
 
-select(input())
+def run_command(command):
+    command_name = command.split()[0]
+    if command_name == "create":
+        create_table(command)
+    elif command_name == "load":
+        load(command)
+    elif command_name == "select":
+        select(command)
+
+
+x = input()
+while x != "end":
+    run_command(x)
+    x = input()
