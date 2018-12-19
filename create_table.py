@@ -2,6 +2,8 @@ import json
 import sqltokenizer
 import os
 import csv
+import shutil
+import zipfile
 from Schema import Schema
 
 
@@ -75,6 +77,9 @@ def load(command):
                     continue
                 table.write(line)
 
+    shutil.make_archive(os.path.join(path, tablename, tablename), "zip", os.path.join(path, tablename), tablename + ".csv")
+    os.remove(os.path.join(path, tablename, tablename + ".csv"))
+
 
 def select(command):
     tokenizer = sqltokenizer.SqlTokenizer(command)
@@ -110,6 +115,9 @@ def select(command):
         arg_list = schema.get_all_field_names()
     arg_list_index = [schema.get_field_index(arg) for arg in arg_list]
 
+    zip = zipfile.ZipFile(os.path.join(table_name, table_name + ".zip"))
+    zip.extractall(table_name)
+
     with open(os.path.join(table_name, table_name + ".csv")) as table:
         reader = csv.reader(table)
         if outfile is None:
@@ -123,6 +131,8 @@ def select(command):
                     row = [row[i] for i in range(len(row)) if i in arg_list_index]
                     writer.writerow(row)
 
+        os.remove(os.path.join(table_name, table_name + ".csv"))
+
 
 def run_command(command):
     command_name = command.split()[0]
@@ -134,7 +144,4 @@ def run_command(command):
         select(command)
 
 
-x = input()
-while x != "end":
-    run_command(x)
-    x = input()
+run_command(input())
