@@ -1,5 +1,6 @@
 import json
 
+
 class Schema:
     def __init__(self, schema_filename):
         self.load(schema_filename)
@@ -16,7 +17,3 @@ class Schema:
 
     def get_field_index(self, field_name):
         return self.name_to_index[field_name]
-
-    def get_field_type(self, field_name):
-        i = self.get_field_index(field_name)
-        return self.fields[i]["type"]
