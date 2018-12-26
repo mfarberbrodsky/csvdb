@@ -75,10 +75,11 @@ class NodeLoad:
 
 
 class NodeSelect:
-    def __init__(self, field_list, outfile_name, table_name):
+    def __init__(self, field_list, outfile_name, table_name, where):
         self.field_list = field_list
         self.outfile_name = outfile_name
         self.table_name = table_name
+        self.where = where
 
     def execute(self, rootdir):
         if not os.path.isdir(os.path.join(rootdir, self.table_name)):

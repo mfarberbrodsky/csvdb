@@ -150,6 +150,7 @@ class Parser:
         field_list = []
         outfile_name = None
         table_name = ""
+        where = None
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'select')
         self.next_token()
@@ -177,7 +178,38 @@ class Parser:
         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
 
-        return NodeCommands.NodeSelect(field_list, outfile_name, table_name)
+        self.next_token()
+        if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'where':
+            self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            field_name = self.val
+            self.next_token()
+            if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:
+                self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER, 'is')
+                op = self.val
+                self.next_token()
+                if self.token == sqltokenizer.SqlTokenKind.KEYWORD:
+                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, "not")
+                    op = op + " " + self.val
+            else:
+                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR)
+                op = self.val
+            self.next_token()
+            if self.token == sqltokenizer.SqlTokenKind.LIT_STR:
+                value = self.val
+            else:
+                self.expect_cur_token(sqltokenizer.SqlTokenKind.LIT_NUM)
+                value = self.val
+
+            if op == 'is' or op == 'is not':
+                assert value == 'NULL'
+            if op == '=':
+                assert value != 'NULL'
+            if op == '<' or op == '<=' or op == '>' or op == '>=':
+                assert isinstance(value, int)
+
+            where = (field_name, op, value)
+
+        return NodeCommands.NodeSelect(field_list, outfile_name, table_name, where)
 
     def parse_command(self):
         self.next_token()
