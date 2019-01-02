@@ -187,25 +187,29 @@ class Parser:
                 self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER, 'is')
                 op = self.val
                 self.next_token()
-                if self.token == sqltokenizer.SqlTokenKind.KEYWORD:
-                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, "not")
+                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'not':
                     op = op + " " + self.val
+                    self.next_token()
             else:
-                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR)
+                self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR)
                 op = self.val
-            self.next_token()
-            if self.token == sqltokenizer.SqlTokenKind.LIT_STR:
+                self.next_token()
+
+            if self.token == sqltokenizer.SqlTokenKind.KEYWORD:
+                self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'null')
+                value = 'null'
+            elif self.token == sqltokenizer.SqlTokenKind.LIT_STR:
                 value = self.val
             else:
                 self.expect_cur_token(sqltokenizer.SqlTokenKind.LIT_NUM)
                 value = self.val
 
             if op == 'is' or op == 'is not':
-                assert value == 'NULL'
+                assert value == 'null'
             if op == '=':
-                assert value != 'NULL'
-            if op == '<' or op == '<=' or op == '>' or op == '>=':
-                assert isinstance(value, int)
+                assert value != 'null'
+            if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
+                assert isinstance(value, int) or isinstance(value, float)
 
             where = (field_name, op, value)
 

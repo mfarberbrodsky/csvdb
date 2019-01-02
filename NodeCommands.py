@@ -81,6 +81,18 @@ class NodeSelect:
         self.table_name = table_name
         self.where = where
 
+    def where_to_func(self, schema):
+        if self.where is None:
+            return lambda row: True
+
+        field_name, op, value = self.where
+        i = schema.get_field_index(field_name)
+        dic_func = {"=": (lambda x: x == str(value)), ">": (lambda x: x != '' and float(x) > value),
+                    'is': (lambda x: x == ''), 'is not': (lambda x: x != ''),
+                    "<": (lambda x: x != '' and float(x) < value), ">=": (lambda x: x != '' and float(x) >= value),
+                    "<=": (lambda x: x != '' and float(x) <= value), "<>": (lambda x: x != '' and float(x) != value)}
+        return lambda row: dic_func[op](row[i])
+
     def execute(self, rootdir):
         if not os.path.isdir(os.path.join(rootdir, self.table_name)):
             raise ValueError("Table {} does not exist.".format(self.table_name))
@@ -89,16 +101,20 @@ class NodeSelect:
         if self.field_list == ['*']:
             self.field_list = schema.get_all_field_names()
 
+        where_func = self.where_to_func(schema)
+
         field_list_index = [schema.get_field_index(field) for field in self.field_list]
         with open(os.path.join(rootdir, self.table_name, '{}.csv'.format(self.table_name)), 'r') as table:
             reader = csv.reader(table)
             if self.outfile_name is None:
                 for row in reader:
-                    row = [row[i] for i in range(len(row)) if i in field_list_index]
-                    print(','.join(row))
+                    if where_func(row):
+                        row = [row[i] for i in range(len(row)) if i in field_list_index]
+                        print(','.join(row))
             else:
                 with open(os.path.join(rootdir, self.outfile_name), 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
                     for row in reader:
-                        row = [row[i] for i in range(len(row)) if i in field_list_index]
-                        writer.writerow(row)
+                        if where_func(row):
+                            row = [row[i] for i in range(len(row)) if i in field_list_index]
+                            writer.writerow(row)

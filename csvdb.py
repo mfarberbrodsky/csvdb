@@ -2,6 +2,7 @@ import argparse
 import logging
 import Parser
 import CSVDBErrors
+import os
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger()
@@ -39,4 +40,17 @@ if args.filename is None:
         print("csvdb>", end=" ")
         command = input()
 else:
-    pass
+    with open(os.path.join(rootdir, args.filename), 'r') as f:
+        for command in f:
+            command_node = None
+            try:
+                command_parser = Parser.Parser(command)
+                command_node = command_parser.parse_command()
+            except CSVDBErrors.CSVDBSyntaxError as e:
+                logger.error(e)
+
+            if command_node is not None:
+                try:
+                    command_node.execute(rootdir)
+                except ValueError as e:
+                    logger.error(e)
