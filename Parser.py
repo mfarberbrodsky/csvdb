@@ -151,6 +151,9 @@ class Parser:
         outfile_name = None
         table_name = ""
         where = None
+        group_by_list =[]
+        having = None
+        order_by_list = []
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'select')
         self.next_token()
@@ -163,8 +166,17 @@ class Parser:
             field_list.append(self.val)
             self.next_token()
             while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
-                self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-                field_list.append(self.val)
+                print (field_list)
+                try:
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                    field_list.append(self.val)
+                except:
+                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
+                    agg = self.val
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(" )
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                    field_list.append((agg,self.val))
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
                 self.next_token()
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
@@ -211,9 +223,85 @@ class Parser:
             if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
                 assert isinstance(value, int) or isinstance(value, float)
 
+            self.next_token() #??
+
             where = (field_name, op, value)
 
-        return NodeCommands.NodeSelect(field_list, outfile_name, table_name, where)
+        #self.next_token()
+        if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'group':
+            self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'by')
+            self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            group_by_list.append(self.val)
+            self.next_token()
+            while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
+                self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                group_by_list.append(self.val)
+                self.next_token()
+            print (group_by_list)
+            print (self.val)
+            if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'having':
+                try:
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                    having_field_name = self.val
+                except:
+                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
+                    agg = self.val
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(" )
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                    having_field_name = ((agg,self.val))
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
+                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR)
+                having_op = self.val
+                self.expect_next_token(sqltokenizer.SqlTokenKind.LIT_NUM)
+                having_value = self.val
+
+                if having_op == '=':
+                    assert having_value != 'null'
+                if having_op == '<' or having_op == '<=' or having_op == '>' or having_op == '>=' or having_op == "<>":
+                    assert isinstance(having_value, int) or isinstance(having_value, float)
+
+                having = (having_field_name, having_op, having_value)
+
+            self.next_token()
+
+        if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'order':
+            self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'by')
+            self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            order_by_val = self.val
+            self.next_token()
+            if self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'desc'):
+                order_by_list.append((order_by_val,'desc'))
+                self.next_token()
+            elif self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'asc'):
+                order_by_list.append((order_by_val,'asc'))
+                self.next_token()
+            else:
+                order_by_list.append((order_by_val, 'asc'))
+            while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
+                self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                order_by_val = self.val
+                self.next_token()
+                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'desc'):
+                    order_by_list.append((order_by_val, 'desc'))
+                    self.next_token()
+                elif self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'asc'):
+                    order_by_list.append((order_by_val, 'asc'))
+                    self.next_token()
+                else:
+                    order_by_list.append((order_by_val, 'asc'))
+
+        print(self.val)
+
+        self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
+        self.expect_next_token(sqltokenizer.SqlTokenKind.EOF, None)
+
+        print(group_by_list)
+        print (order_by_list)
+        print(self.val)
+
+
+
+        return NodeCommands.NodeSelect(field_list, outfile_name, table_name, where, group_by_list, having, order_by_list)
 
     def parse_command(self):
         self.next_token()
@@ -233,3 +321,16 @@ class Parser:
 
     def raise_error(self, message):
         raise CSVDBErrors.CSVDBSyntaxError(message, self.line, self.col, self.text)
+
+
+test = Parser(r"""select year, max(name) , avg(duration) 
+    into outfile "c:\\temp\\mobvie_duration.csv"
+    from movies
+    where year >= 2000
+    group by year
+    having avg(duration) > 0.1
+    order by year asc;
+    """)
+
+test.next_token()
+test.parse_select()
