@@ -9,11 +9,16 @@ class Schema:
         j = json.load(open(schema_filename))
         self.fields = j["schema"]
         self.name_to_index = {}
+        self.name_to_type = {}
         for i, f in enumerate(self.fields):
             self.name_to_index[f["field"]] = i
+            self.name_to_type[f["field"]] = f["type"]
 
     def get_all_field_names(self):
         return [field["field"] for field in self.fields]
 
     def get_field_index(self, field_name):
         return self.name_to_index[field_name]
+
+    def get_field_type(self, field_name):
+        return self.name_to_type[field_name]

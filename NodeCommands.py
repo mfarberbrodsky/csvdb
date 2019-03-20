@@ -3,6 +3,7 @@ import shutil
 import json
 import csv
 from Schema import Schema
+from order_by import OrderBy
 
 
 class NodeCreate:
@@ -75,11 +76,18 @@ class NodeLoad:
 
 
 class NodeSelect:
-    def __init__(self, field_list, outfile_name, table_name, where):
+    def __init__(self, field_list, outfile_name, table_name, where, group_by_list, having, order_by_list):
         self.field_list = field_list
         self.outfile_name = outfile_name
         self.table_name = table_name
         self.where = where
+        self.group_by_list = group_by_list
+        self.having = having
+        self.order_by_list = order_by_list
+
+    def order_by(self, rootdir):
+        order_obj = OrderBy(rootdir, self.field_list, self.table_name, self.order_by_list)
+        order_obj.generate_temp_file()
 
     def where_to_func(self, schema):
         if self.where is None:
