@@ -82,7 +82,6 @@ class Parser:
                 fields.append({'field': field_name, 'type': field_type})
                 self.next_token()
             self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
-            self.expect_next_token(sqltokenizer.SqlTokenKind.EOF)
 
         return NodeCommands.NodeCreate(if_not_exists, table_name, fields, as_select)
 
@@ -105,7 +104,6 @@ class Parser:
         self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
-        self.expect_next_token(sqltokenizer.SqlTokenKind.EOF)
 
         return NodeCommands.NodeDrop(if_exists, table_name)
 
@@ -137,7 +135,6 @@ class Parser:
             self.next_token()
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
-        self.expect_next_token(sqltokenizer.SqlTokenKind.EOF)
 
         return NodeCommands.NodeLoad(infile_name, table_name, ignore_lines)
 
@@ -219,12 +216,12 @@ class Parser:
                 self.expect_cur_token(sqltokenizer.SqlTokenKind.LIT_NUM)
                 value = self.val
 
-            if op == 'is' or op == 'is not':
-                assert value == 'null'
-            if op == '=':
-                assert value != 'null'
-            if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
-                assert isinstance(value, int) or isinstance(value, float)
+            # if op == 'is' or op == 'is not':
+            #     assert value == 'null'
+            # if op == '=':
+            #     assert value != 'null'
+            # if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
+            #     assert isinstance(value, int) or isinstance(value, float)
 
             self.next_token()  # ??
 
@@ -291,10 +288,7 @@ class Parser:
                 else:
                     order_by_list.append((order_by_val, 'asc'))
 
-
         self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
-        self.expect_next_token(sqltokenizer.SqlTokenKind.EOF, None)
-
 
         return NodeCommands.NodeSelect(field_list, outfile_name, table_name, where, group_by_list, having,
                                        order_by_list)
@@ -317,16 +311,3 @@ class Parser:
 
     def raise_error(self, message):
         raise CSVDBErrors.CSVDBSyntaxError(message, self.line, self.col, self.text)
-
-
-test = Parser(r"""select year, max(name) , avg(duration) 
-    into outfile "c:\\temp\\mobvie_duration.csv"
-    from movies
-    where year >= 2000
-    group by year
-    having avg(duration) > 0.1
-    order by year asc;
-    """)
-
-test.next_token()
-test.parse_select()

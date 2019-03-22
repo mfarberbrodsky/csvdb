@@ -116,13 +116,13 @@ class NodeSelect:
             reader = csv.reader(table)
             if self.outfile_name is None:
                 for row in reader:
-                    if where_func(row):
+                    if row and where_func(row):
                         row = [row[i] for i in range(len(row)) if i in field_list_index]
                         print(','.join(row))
             else:
                 with open(os.path.join(rootdir, self.outfile_name), 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
                     for row in reader:
-                        if where_func(row):
+                        if row and where_func(row):
                             row = [row[i] for i in range(len(row)) if i in field_list_index]
                             writer.writerow(row)

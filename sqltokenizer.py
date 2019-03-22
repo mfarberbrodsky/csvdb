@@ -3,6 +3,7 @@ import ast
 from enum import Enum
 import re
 
+
 class SqlTokenKind(Enum):
     ERROR = -1
     EOF = 0
@@ -21,7 +22,6 @@ class SqlTokenizer(object):
     # LIT_STR = 3
     # LIT_NUM = 4
     # OPERATOR = 5
-
 
     _reserved_words = [
         'select',
@@ -76,7 +76,7 @@ class SqlTokenizer(object):
     def __init__(self, text):
         self._text = text
         self._n = len(text)
-        self._i_next = 0   # index into text[]
+        self._i_next = 0  # index into text[]
         # cur_line_start_index, cur_line_number are used to give syntax error messages location
         self._cur_line_start_index = 0  # index into text[] of the line start
         self._cur_line_number = 0
@@ -94,10 +94,11 @@ class SqlTokenizer(object):
         num_val = self._next_lit_numeric()
         if num_val is not None:
             return SqlTokenKind.LIT_NUM, num_val
-        if self._cur() == '"':
+        if self._cur() == '"' or self._cur() == "'":
+            quote = self._cur()
             s = self._next_lit_string()
-            if not s or s[-1] != '"':
-                self._i_next = len(self._text)   # error - move to end
+            if not s or s[-1] != quote:
+                self._i_next = len(self._text)  # error - move to end
                 return SqlTokenKind.ERROR, "ERROR: BAD TOKEN"
             return SqlTokenKind.LIT_STR, ast.literal_eval(s)
         next_operator = self._next_operator()
@@ -115,7 +116,7 @@ class SqlTokenizer(object):
     def _next_lit_numeric(self):
         m = re.match(r"^([\-\+]?\d+(\.\d*)?(e[\-\+]?\d+)?)", self._text[self._i_next:])
         if m:
-            num, point, exp = m.group(1,2,3)
+            num, point, exp = m.group(1, 2, 3)
 
             if point or exp:
                 val = float(num)
@@ -227,6 +228,7 @@ def _test():
 
         if tok == SqlTokenKind.EOF:
             break
+
 
 if __name__ == "__main__":
     _test()

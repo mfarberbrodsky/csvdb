@@ -41,16 +41,19 @@ if args.filename is None:
         command = input()
 else:
     with open(os.path.join(rootdir, args.filename), 'r') as f:
-        for command in f:
-            command_node = None
+        command_text = f.read()
+        command_parser = Parser.Parser(command_text)
+        while True:
             try:
-                command_parser = Parser.Parser(command)
                 command_node = command_parser.parse_command()
             except CSVDBErrors.CSVDBSyntaxError as e:
                 logger.error(e)
+                break
+            if command_node is None:
+                break
 
-            if command_node is not None:
-                try:
-                    command_node.execute(rootdir)
-                except ValueError as e:
-                    logger.error(e)
+            try:
+                command_node.execute(rootdir)
+            except ValueError as e:
+                logger.error(e)
+                break
