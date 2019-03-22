@@ -32,13 +32,17 @@ class NodeCreate:
             if self.as_select.field_list == ['*']:
                 new_fields = original_fields
             else:
-                new_fields = [field for field in original_fields if field['field'] in self.as_select.field_list]
+                # new_fields = [field[1] for field in self.as_select.field_list]
+                # new_fields = [field for field in original_fields if field['field'] in self.as_select.field_list]
+                original_field_to_type = {field['field']: field['type'] for field in original_fields}
+                new_fields = [{'field': field[1], 'type': original_field_to_type[field[0]]} for field in
+                              self.as_select.field_list]
 
             temp_create = NodeCreate(False, self.table_name, new_fields, None)
             temp_create.execute(rootdir)
-            self.as_select.outfile_name = os.path.join(rootdir, self.table_name, 'temp.csv')
+            self.as_select.outfile_name = os.path.join(self.table_name, 'temp.csv')
             self.as_select.execute(rootdir)
-            temp_load = NodeLoad(os.path.join(rootdir, self.table_name, 'temp.csv'), self.table_name, 0)
+            temp_load = NodeLoad(os.path.join(self.table_name, 'temp.csv'), self.table_name, 0)
             temp_load.execute(rootdir)
             os.remove(os.path.join(rootdir, self.table_name, 'temp.csv'))
 
@@ -108,6 +112,8 @@ class NodeSelect:
         schema = Schema(os.path.join(rootdir, self.table_name, 'table.json'))
         if self.field_list == ['*']:
             self.field_list = schema.get_all_field_names()
+        else:
+            self.field_list = [field[0] for field in self.field_list]
 
         where_func = self.where_to_func(schema)
 
@@ -117,12 +123,12 @@ class NodeSelect:
             if self.outfile_name is None:
                 for row in reader:
                     if row and where_func(row):
-                        row = [row[i] for i in range(len(row)) if i in field_list_index]
+                        row = [row[i] for i in field_list_index]
                         print(','.join(row))
             else:
                 with open(os.path.join(rootdir, self.outfile_name), 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
                     for row in reader:
                         if row and where_func(row):
-                            row = [row[i] for i in range(len(row)) if i in field_list_index]
+                            row = [row[i] for i in field_list_index]
                             writer.writerow(row)

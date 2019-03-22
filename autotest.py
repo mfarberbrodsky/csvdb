@@ -38,7 +38,8 @@ for test in tests:
             expected_text = f.read()
         with open(os.path.join(curr_test_dir, "output.csv")) as f:
             actual_text = f.read()
-        if expected_text.strip() == actual_text.strip():
+        if "\n".join([s for s in expected_text.split("\n") if s]) == "\n".join(
+                [s for s in actual_text.split("\n") if s]):
             print("Passed test " + test + "\n")
             num_passed += 1
         else:

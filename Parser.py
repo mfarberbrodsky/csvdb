@@ -163,21 +163,53 @@ class Parser:
             field_list = ['*']
             self.next_token()
         else:
-            self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            field_list.append(self.val)
-            self.next_token()
-            while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
-                try:
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-                    field_list.append(self.val)
-                except:
+            # self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            # field_list.append(self.val)
+            # self.next_token()
+            # while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
+            #     try:
+            #         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            #         field_list.append(self.val)
+            #     except:
+            #         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
+            #         agg = self.val
+            #         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(")
+            #         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            #         field_list.append((agg, self.val))
+            #         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
+            #     self.next_token()
+            first = True
+            while first or (self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ','):
+                if first:
+                    first = False
+                else:
+                    self.next_token()
+
+                agg = None
+
+                if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:
+                    cur_name = self.val
+                    self.next_token()
+                else:
                     self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
                     agg = self.val
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(")
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, '(')
                     self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-                    field_list.append((agg, self.val))
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
-                self.next_token()
+                    cur_name = self.val
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ')')
+                    self.next_token()
+                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'as')
+
+                output_name = cur_name
+                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'as':
+                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                    output_name = self.val
+                    self.next_token()
+
+                if agg:
+                    field_list.append(((agg, cur_name), output_name))
+                else:
+                    field_list.append((cur_name, output_name))
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'into':
