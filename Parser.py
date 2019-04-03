@@ -255,7 +255,7 @@ class Parser:
             # if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
             #     assert isinstance(value, int) or isinstance(value, float)
 
-            self.next_token()  # ??
+            self.next_token()
 
             where = (field_name, op, value)
 
