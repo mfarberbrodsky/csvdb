@@ -118,17 +118,30 @@ class NodeSelect:
         where_func = self.where_to_func(schema)
 
         field_list_index = [schema.get_field_index(field) for field in self.field_list]
-        with open(os.path.join(rootdir, self.table_name, '{}.csv'.format(self.table_name)), 'r') as table:
-            reader = csv.reader(table)
-            if self.outfile_name is None:
+
+        order = None
+        if self.order_by_list:
+            order = OrderBy(rootdir, self.field_list, self.table_name, self.order_by_list)
+            order.generate_temp_file()
+
+        if self.order_by_list:
+            temp_file_name = os.listdir(os.path.join(rootdir, self.table_name, 'temp'))[0]
+            table = open(os.path.join(rootdir, self.table_name, 'temp', temp_file_name), 'r')
+        else:
+            table = open(os.path.join(rootdir, self.table_name, '{}.csv'.format(self.table_name)), 'r')
+
+        reader = csv.reader(table)
+        if self.outfile_name is None:
+            for row in reader:
+                if row and where_func(row):
+                    row = [row[i] for i in field_list_index]
+                    print(','.join(row))
+        else:
+            with open(os.path.join(rootdir, self.outfile_name), 'w', newline='') as outfile:
+                writer = csv.writer(outfile)
                 for row in reader:
                     if row and where_func(row):
                         row = [row[i] for i in field_list_index]
-                        print(','.join(row))
-            else:
-                with open(os.path.join(rootdir, self.outfile_name), 'w', newline='') as outfile:
-                    writer = csv.writer(outfile)
-                    for row in reader:
-                        if row and where_func(row):
-                            row = [row[i] for i in field_list_index]
-                            writer.writerow(row)
+                        writer.writerow(row)
+
+        table.close()
