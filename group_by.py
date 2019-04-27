@@ -30,17 +30,27 @@ class GroupBy:
         orderObj.generate_temp_file()
 
         fileName = os.listdir(os.path.join(self.rootdir, self.table_name, 'temp'))[0]
+        field_index_list = [self.schema.get_field_index(field) for field in self.field_list]
         group_by_index_list = [self.schema.get_field_index(field) for field in self.group_by_list]
 
         with open(os.path.join(self.rootdir, self.table_name, 'temp', fileName), 'r') as table:
             reader = csv.reader(table)
-            prev_row = next(reader)
-            prev_row = [prev_row[i] for i in group_by_index_list]
-            agg_val_list = [prev_row[i] for i in self.agg_field_dict]
+            new_res_fields = next(reader)
+            #prev_row = next(reader)
+            #prev_row = [prev_row[i] for i in group_by_index_list]
+            #agg_val_list = [prev_row[i] for i in self.agg_field_dict]
 
             for row in reader:
-                if [row[i] for i in group_by_index_list] == prev_row:
+                #if [row[i] for i in group_by_index_list] == prev_row:
+                if [row[i] for i in group_by_index_list] == [new_res_fields[i] for i in group_by_index_list]:
                     for i, func in self.agg_field_dict.items():
-                        agg_val_list[i] = (func)(agg_val_list[i], row[i])
+                        #agg_val_list[i] = func(agg_val_list[i], row[i])
+                        new_res_fields[i] = func(new_res_fields[i], row[i])
                 else:
-
+                    new_line = [str(new_res_fields[i]) for i in field_index_list]
+                    new_line = " ".join(new_line)
+                    if self.having is None:
+                        print (new_line)
+                    #elif new_res_fields[self.schema.get_field_index(self.having[0])] (op) (value):
+                     #   print (new_line)
+                    new_res_fields = row
