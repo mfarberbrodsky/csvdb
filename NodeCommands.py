@@ -4,6 +4,7 @@ import json
 import csv
 from Schema import Schema
 from order_by import OrderBy
+from group_by import GroupBy
 
 
 class NodeCreate:
@@ -135,6 +136,11 @@ class NodeSelect:
             table = open(os.path.join(rootdir, self.table_name, 'temp', temp_file_name), 'r')
         else:
             table = open(os.path.join(rootdir, self.table_name, '{}.csv'.format(self.table_name)), 'r')
+
+        if self.group_by_list:
+            group = GroupBy(rootdir, self.field_list, self.table_name, self.group_by_list, self.having)
+            group.execute()
+
 
         reader = csv.reader(table)
         if self.outfile_name is None:

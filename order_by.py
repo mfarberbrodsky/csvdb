@@ -23,6 +23,7 @@ class OrderBy:
     def lexicographic_row(self, row):
         type_to_func = {'int': int, 'float': float}
         result = []
+        print (self.order_by_list)
         for field, order in self.order_by_list:
             field_index = self.schema.get_field_index(field)
             field_type = self.schema.get_field_type(field)

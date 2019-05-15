@@ -24,11 +24,19 @@ class GroupBy:
         self.having = having
 
     def execute(self):
-        orderObj = OrderBy(self.rootdir, self.field_list, self.table_name, self.group_by_list)
+        order_by = [(a,'asc') for a in self.group_by_list]
+        orderObj = OrderBy(self.rootdir, self.field_list, self.table_name, order_by)
         orderObj.generate_temp_file()
 
         fileName = os.listdir(os.path.join(self.rootdir, self.table_name, 'temp'))[0]
-        field_index_list = [self.schema.get_field_index(field) for field in self.field_list]
+
+        field_index_list = []
+        for field in self.field_list:
+            if isinstance(field, str):
+                field_index_list.append(self.schema.get_field_index(field))
+            elif isinstance(field, tuple):
+                field_index_list.append(self.schema.get_field_index(field[1]))
+
         group_by_index_list = [self.schema.get_field_index(field) for field in self.group_by_list]
 
         with open(os.path.join(self.rootdir, self.table_name, 'temp', fileName), 'r') as table:
