@@ -292,7 +292,7 @@ class Parser:
 
                 having = (having_field_name, having_op, having_value)
 
-            self.next_token()
+                self.next_token()
 
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'order':
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'by')

@@ -117,7 +117,13 @@ class NodeSelect:
 
         where_func = self.where_to_func(schema)
 
-        field_list_index = [schema.get_field_index(field) for field in self.field_list]
+        print(self.field_list)
+        field_list_index = []
+        for field in self.field_list:
+            if isinstance(field, str):
+                field_list_index.append(schema.get_field_index(field))
+            elif isinstance(field, tuple):
+                field_list_index.append(schema.get_field_index(field[1]))
 
         order = None
         if self.order_by_list:

@@ -26,12 +26,12 @@ for test in tests:
             if command_node is None:
                 break
 
-            try:
-                command_node.execute(curr_test_dir)
-            except Exception as e:
-                print("Runtime error in test " + test + ": " + str(e))
-                is_exception = True
-                break
+            # try:
+            command_node.execute(curr_test_dir)
+            # except Exception as e:
+            #     print("Runtime error in test " + test + ": " + str(e))
+            #     is_exception = True
+            #     break
 
     if not is_exception:
         with open(os.path.join(curr_test_dir, "good_output.csv")) as f:
@@ -46,12 +46,5 @@ for test in tests:
             print("Failed test " + test + "\n")
     else:
         print("Failed test " + test + "\n")
-
-    to_remove = ["output.csv", "test/table.json", "test/test.csv"]
-    for file in to_remove:
-        if os.path.exists(os.path.join(curr_test_dir, file)):
-            os.remove(os.path.join(curr_test_dir, file))
-    if os.path.exists(os.path.join(curr_test_dir, "test")):
-        os.rmdir(os.path.join(curr_test_dir, "test"))
 
 print("Passed " + str(num_passed) + " out of " + str(num_total) + " tests")
