@@ -47,6 +47,8 @@ class GroupBy:
             # agg_val_list = [prev_row[i] for i in self.agg_field_dict]
 
             for row in reader:
+                if row == []:
+                    continue
                 # if [row[i] for i in group_by_index_list] == prev_row:
                 if [row[i] for i in group_by_index_list] == [new_res_fields[i] for i in group_by_index_list]:
                     for i, func in self.agg_field_dict.items():
