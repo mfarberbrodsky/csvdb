@@ -17,6 +17,12 @@ class GroupBy:
                 field_agg = field[0][0]
                 field_name = field[0][1]
                 self.agg_field_dict[self.schema.get_field_index(field_name)] = agg_to_func[field_agg]
+            elif isinstance(field, tuple):
+                field_agg = field[0]
+                field_name = field[1]
+                self.agg_field_dict[self.schema.get_field_index(field_name)] = agg_to_func[field_agg]
+        for i, func in self.agg_field_dict.items():
+            print (i,func)
 
         # dictionary from index to aggregator name if exists
         self.table_name = table_name
@@ -51,9 +57,9 @@ class GroupBy:
                     continue
                 # if [row[i] for i in group_by_index_list] == prev_row:
                 if [row[i] for i in group_by_index_list] == [new_res_fields[i] for i in group_by_index_list]:
-                    for i, func in self.agg_field_dict.items():
+                    for i, func in self.agg_field_dict.items(): #is empty?
                         # agg_val_list[i] = func(agg_val_list[i], row[i])
-                        new_res_fields[i] = func(new_res_fields[i], row[i])
+                        new_res_fields[i] = str(func(int(new_res_fields[i]), int(row[i])))
                 else:
                     new_line = [str(new_res_fields[i]) for i in field_index_list]
                     new_line = " ".join(new_line)
@@ -63,3 +69,8 @@ class GroupBy:
                     # elif new_res_fields[self.schema.get_field_index(self.having[0])] (op) (value):
                     #   print (new_line)
                     new_res_fields = row
+            new_line = [str(new_res_fields[i]) for i in field_index_list] #last row
+            new_line = " ".join(new_line)
+            if self.having is None:
+                print(new_line)
+                print("0")
