@@ -9,7 +9,7 @@ class GroupBy:
     def __init__(self, rootdir, field_list, table_name, group_by_list, having):
         self.rootdir = rootdir
         self.schema = Schema(os.path.join(rootdir, table_name, 'table.json'))
-        agg_to_func = {'max': max, 'min': min, 'sum': lambda x, y: x + y, 'count': lambda x, y: x + 1}
+        agg_to_func = {'max': lambda x, y: max(float(x), float(y)), 'min': lambda x, y: min(float(x), float(y)), 'sum': lambda x, y: float(x) + float(y), 'count': lambda x, y: x + 1}
         self.field_list = field_list
         self.agg_field_dict = {}
         for field in field_list:
@@ -28,6 +28,18 @@ class GroupBy:
         self.table_name = table_name
         self.group_by_list = group_by_list
         self.having = having
+
+    def having_to_func(self):
+        if self.having is None:
+            return lambda row: True
+
+        field_name, op, value = self.having
+        i = self.schema.get_field_index(field_name)
+        dic_func = {"=": (lambda x: x == str(value)), ">": (lambda x: x != '' and float(x) > value),
+                    'is': (lambda x: x == ''), 'is not': (lambda x: x != ''),
+                    "<": (lambda x: x != '' and float(x) < value), ">=": (lambda x: x != '' and float(x) >= value),
+                    "<=": (lambda x: x != '' and float(x) <= value), "<>": (lambda x: x != '' and float(x) != value)}
+        return lambda row: dic_func[op](row[i])
 
     def execute(self):
         order_by = [(a,'asc') for a in self.group_by_list]
@@ -48,29 +60,22 @@ class GroupBy:
         with open(os.path.join(self.rootdir, self.table_name, 'temp', fileName), 'r') as table:
             reader = csv.reader(table)
             new_res_fields = next(reader)
-            # prev_row = next(reader)
-            # prev_row = [prev_row[i] for i in group_by_index_list]
-            # agg_val_list = [prev_row[i] for i in self.agg_field_dict]
 
             for row in reader:
                 if row == []:
                     continue
-                # if [row[i] for i in group_by_index_list] == prev_row:
+
+                if not self.having_to_func()(row):
+                    continue
+
                 if [row[i] for i in group_by_index_list] == [new_res_fields[i] for i in group_by_index_list]:
-                    for i, func in self.agg_field_dict.items(): #is empty?
-                        # agg_val_list[i] = func(agg_val_list[i], row[i])
-                        new_res_fields[i] = str(func(int(new_res_fields[i]), int(row[i])))
+                    for i, func in self.agg_field_dict.items():
+                        new_res_fields[i] = str(func(new_res_fields[i], row[i]))
                 else:
                     new_line = [str(new_res_fields[i]) for i in field_index_list]
                     new_line = " ".join(new_line)
-                    if self.having is None:
-                        print(new_line)
-                        print("0")
-                    # elif new_res_fields[self.schema.get_field_index(self.having[0])] (op) (value):
-                    #   print (new_line)
+                    print(new_line)
                     new_res_fields = row
             new_line = [str(new_res_fields[i]) for i in field_index_list] #last row
             new_line = " ".join(new_line)
-            if self.having is None:
-                print(new_line)
-                print("0")
+            print(new_line)
