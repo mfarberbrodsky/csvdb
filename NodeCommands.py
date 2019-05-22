@@ -126,21 +126,19 @@ class NodeSelect:
             elif isinstance(field, tuple):
                 field_list_index.append(schema.get_field_index(field[1]))
 
-        order = None
-        if self.order_by_list:
-            order = OrderBy(rootdir, self.field_list, self.table_name, self.order_by_list)
-            order.generate_temp_file()
-
-        if self.order_by_list:
-            temp_file_name = os.listdir(os.path.join(rootdir, self.table_name, 'temp'))[0]
-            table = open(os.path.join(rootdir, self.table_name, 'temp', temp_file_name), 'r')
-        else:
-            table = open(os.path.join(rootdir, self.table_name, '{}.csv'.format(self.table_name)), 'r')
-
+        file_name = '{}.csv'.format(self.table_name)
         if self.group_by_list:
             group = GroupBy(rootdir, self.field_list, self.table_name, self.group_by_list, self.having)
             group.execute()
+            file_name = 'group_by_file'
 
+        if self.order_by_list:
+            order = OrderBy(rootdir, self.field_list, self.table_name, self.order_by_list, file_name)
+            order.generate_temp_file()
+            temp_file_name = os.listdir(os.path.join(rootdir, self.table_name, 'temp'))[0]
+            table = open(os.path.join(rootdir, self.table_name, 'temp', temp_file_name), 'r')
+        else:
+            table = open(os.path.join(rootdir, self.table_name, file_name), 'r')
 
         reader = csv.reader(table)
         if self.outfile_name is None:

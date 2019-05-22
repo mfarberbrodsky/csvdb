@@ -7,15 +7,17 @@ chunk_size = 32768
 pool_size = os.cpu_count()
 
 class OrderBy:
-    def __init__(self, rootdir, field_list, table_name, order_by_list):
+    def __init__(self, rootdir, field_list, table_name, order_by_list, file_name=None):
+        if file_name is None:
+            file_name = table_name + ".csv"
+
         self.rootdir = rootdir
         self.field_list = field_list
-        self.file_name = os.path.join(rootdir, table_name, '{}.csv'.format(table_name))
+        self.file_name = os.path.join(rootdir, table_name, file_name)
         self.file_size = os.path.getsize(self.file_name)
         self.num_threads = os.cpu_count()
         if not os.path.isdir(os.path.join(rootdir, table_name, 'temp')):
             os.mkdir(os.path.join(rootdir, table_name, 'temp'))
-        self.temp_file_name = os.path.join(rootdir, table_name, 'temp', '{}.csv'.format(table_name))
         self.temp_file_dir = os.path.join(rootdir, table_name, 'temp')
         self.order_by_list = order_by_list
         self.schema = Schema(os.path.join(rootdir, table_name, 'table.json'))

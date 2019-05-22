@@ -9,6 +9,7 @@ class GroupBy:
     def __init__(self, rootdir, field_list, table_name, group_by_list, having):
         self.rootdir = rootdir
         self.schema = Schema(os.path.join(rootdir, table_name, 'table.json'))
+        type_to_func = {'int': int, 'varchar': str, 'float': float}
         agg_to_func = {'max': lambda x, y: max(float(x), float(y)), 'min': lambda x, y: min(float(x), float(y)), 'sum': lambda x, y: float(x) + float(y), 'count': lambda x, y: x + 1}
         self.field_list = field_list
         self.agg_field_dict = {}
@@ -16,11 +17,13 @@ class GroupBy:
             if isinstance(field[0], tuple):
                 field_agg = field[0][0]
                 field_name = field[0][1]
-                self.agg_field_dict[self.schema.get_field_index(field_name)] = agg_to_func[field_agg]
+                field_type = self.schema.get_field_type(field_name)
+                self.agg_field_dict[self.schema.get_field_index(field_name)] = lambda x, y: type_to_func[field_type](agg_to_func[field_agg](x, y))
             elif isinstance(field, tuple):
                 field_agg = field[0]
                 field_name = field[1]
-                self.agg_field_dict[self.schema.get_field_index(field_name)] = agg_to_func[field_agg]
+                field_type = self.schema.get_field_type(field_name)
+                self.agg_field_dict[self.schema.get_field_index(field_name)] = lambda x, y: type_to_func[field_type](agg_to_func[field_agg](x, y))
         for i, func in self.agg_field_dict.items():
             print (i,func)
 
@@ -28,6 +31,7 @@ class GroupBy:
         self.table_name = table_name
         self.group_by_list = group_by_list
         self.having = having
+
 
     def having_to_func(self):
         if self.having is None:
@@ -57,6 +61,8 @@ class GroupBy:
 
         group_by_index_list = [self.schema.get_field_index(field) for field in self.group_by_list]
 
+        new_table_file = open(os.path.join(self.rootdir, self.table_name, 'group_by_file'), 'w')
+
         with open(os.path.join(self.rootdir, self.table_name, 'temp', fileName), 'r') as table:
             reader = csv.reader(table)
             new_res_fields = next(reader)
@@ -73,9 +79,9 @@ class GroupBy:
                         new_res_fields[i] = str(func(new_res_fields[i], row[i]))
                 else:
                     new_line = [str(new_res_fields[i]) for i in field_index_list]
-                    new_line = " ".join(new_line)
-                    print(new_line)
+                    new_line = ",".join(new_line)
+                    new_table_file.write(new_line + "\n")
                     new_res_fields = row
             new_line = [str(new_res_fields[i]) for i in field_index_list] #last row
-            new_line = " ".join(new_line)
-            print(new_line)
+            new_line = ",".join(new_line)
+            new_table_file.write(new_line + "\n")
