@@ -114,7 +114,7 @@ class NodeSelect:
         if self.field_list == ['*']:
             self.field_list = schema.get_all_field_names()
         else:
-            self.field_list = [field[0] for field in self.field_list]
+            self.field_list = [field[0] for field in self.field_list] ############### CHANGE THIS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         where_func = self.where_to_func(schema)
 

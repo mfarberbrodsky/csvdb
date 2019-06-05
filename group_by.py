@@ -14,6 +14,7 @@ class GroupBy:
         self.field_list = field_list
         self.agg_field_dict = {}
         for field in field_list:
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAA ", field)
             if isinstance(field[0], tuple):
                 field_agg = field[0][0]
                 field_name = field[0][1]
