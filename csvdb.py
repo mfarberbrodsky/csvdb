@@ -55,5 +55,6 @@ else:
             try:
                 command_node.execute(rootdir)
             except ValueError as e:
+                raise e
                 logger.error(e)
                 break

@@ -2,86 +2,91 @@ import os
 import csv
 
 from order_by import OrderBy
-from Schema import Schema
 
+type_to_func = {'int': int, 'timestamp': int, 'float': float, 'varchar': str}
+agg_to_func = {'min': min, 'max': max, 'sum': lambda result, x: result + x,
+               'count': lambda result, x: result + 1}
 
 class GroupBy:
-    def __init__(self, rootdir, field_list, table_name, group_by_list, having):
+    def __init__(self, rootdir, all_fields, selected_fields, table_name, group_by_list, having):
         self.rootdir = rootdir
-        self.schema = Schema(os.path.join(rootdir, table_name, 'table.json'))
-        type_to_func = {'int': int, 'varchar': str, 'float': float}
-        agg_to_func = {'max': lambda x, y: max(float(x), float(y)), 'min': lambda x, y: min(float(x), float(y)), 'sum': lambda x, y: float(x) + float(y), 'count': lambda x, y: x + 1}
-        self.field_list = field_list
-        self.agg_field_dict = {}
-        for field in field_list:
-            if isinstance(field[0], tuple):
-                field_agg = field[0][0]
-                field_name = field[0][1]
-                field_type = self.schema.get_field_type(field_name)
-                self.agg_field_dict[self.schema.get_field_index(field_name)] = lambda x, y: type_to_func[field_type](agg_to_func[field_agg](x, y))
-            elif isinstance(field, tuple):
-                field_agg = field[0]
-                field_name = field[1]
-                field_type = self.schema.get_field_type(field_name)
-                self.agg_field_dict[self.schema.get_field_index(field_name)] = lambda x, y: type_to_func[field_type](agg_to_func[field_agg](x, y))
-        for i, func in self.agg_field_dict.items():
-            print (i,func)
-
-        # dictionary from index to aggregator name if exists
         self.table_name = table_name
-        self.group_by_list = group_by_list
-        self.having = having
+        self.selected_fields = selected_fields
+        self.all_fields = all_fields
+        self.group_by_list = []
+        for field in group_by_list:
+            for f in all_fields:
+                if f.as_name == field:
+                    self.group_by_list.append(f.index)
+        self.order_by_list = [(x, 'asc') for x in group_by_list]
 
+        self.aggregated_list = []
+        for field in selected_fields:
+            if field.agg is not None:
+                if field.agg == 'count':
+                    self.aggregated_list.append((agg_to_func[field.agg], field.index, (lambda x: 1)))
+                else:
+                    self.aggregated_list.append((agg_to_func[field.agg], field.index, type_to_func[field.result_type]))
+
+        self.temp_file_dir = os.path.join(self.rootdir, self.table_name, 'temp')
+        self.having = having
 
     def having_to_func(self):
         if self.having is None:
             return lambda row: True
 
-        field_name, op, value = self.having
-        i = self.schema.get_field_index(field_name)
-        dic_func = {"=": (lambda x: x == str(value)), ">": (lambda x: x != '' and float(x) > value),
+        field, operator, value = self.having
+        index = None
+        if isinstance(field, tuple):  # Having on aggregator (without as)
+            agg, field_name = field
+            for f in self.selected_fields:
+                if f.agg == agg and f.name == field_name:
+                    index = f.index
+        else:
+            for f in self.selected_fields:
+                if f.as_name == field:
+                    index = f.index
+
+        dic_func = {"=": (lambda x: x == value), ">": (lambda x: x != '' and x > value),
                     'is': (lambda x: x == ''), 'is not': (lambda x: x != ''),
-                    "<": (lambda x: x != '' and float(x) < value), ">=": (lambda x: x != '' and float(x) >= value),
-                    "<=": (lambda x: x != '' and float(x) <= value), "<>": (lambda x: x != '' and float(x) != value)}
-        return lambda row: dic_func[op](row[i])
+                    "<": (lambda x: x != '' and x < value), ">=": (lambda x: x != '' and x >= value),
+                    "<=": (lambda x: x != '' and x <= value), "<>": (lambda x: x != '' and x != value)}
 
-    def execute(self):
-        order_by = [(a,'asc') for a in self.group_by_list]
-        orderObj = OrderBy(self.rootdir, self.field_list, self.table_name, order_by)
-        orderObj.generate_temp_file()
+        return lambda row: dic_func[operator](row[index])
 
-        fileName = os.listdir(os.path.join(self.rootdir, self.table_name, 'temp'))[0]
+    def initiate_res_fields(self, row):
+        result = row[:]
+        for agg_func, index, type_func in self.aggregated_list:
+            result[index] = type_func(row[index])
+        return result
 
-        field_index_list = []
-        for field in self.field_list:
-            if isinstance(field, str):
-                field_index_list.append(self.schema.get_field_index(field))
-            elif isinstance(field, tuple):
-                field_index_list.append(self.schema.get_field_index(field[1]))
+    def generate_temp_file(self):  # Writes result to temp file
+        order_by = OrderBy(self.rootdir, self.table_name, self.all_fields, self.order_by_list)
+        order_by.generate_temp_file()
+        order_by_result_file_name = os.path.join(order_by.temp_file_dir, os.listdir(order_by.temp_file_dir)[0])
 
-        group_by_index_list = [self.schema.get_field_index(field) for field in self.group_by_list]
+        new_table_file = open(os.path.join(self.temp_file_dir, 'group_by_file'), 'w')
 
-        new_table_file = open(os.path.join(self.rootdir, self.table_name, 'group_by_file'), 'w')
+        having_func = self.having_to_func()
 
-        with open(os.path.join(self.rootdir, self.table_name, 'temp', fileName), 'r') as table:
-            reader = csv.reader(table)
-            new_res_fields = next(reader)
+        with open(order_by_result_file_name, 'r') as order_by_result_file:
+            reader = csv.reader(order_by_result_file)
+            row = next(reader)
+            new_res_fields = self.initiate_res_fields(row)
 
             for row in reader:
-                if row == []:
-                    continue
-
-                if not self.having_to_func()(row):
-                    continue
-
-                if [row[i] for i in group_by_index_list] == [new_res_fields[i] for i in group_by_index_list]:
-                    for i, func in self.agg_field_dict.items():
-                        new_res_fields[i] = str(func(new_res_fields[i], row[i]))
+                if [row[i] for i in self.group_by_list] == [str(new_res_fields[i]) for i in self.group_by_list]:
+                    for agg_func, index, type_func in self.aggregated_list:
+                        new_res_fields[index] = agg_func(new_res_fields[index], type_func(row[index]))
                 else:
-                    new_line = [str(new_res_fields[i]) for i in field_index_list]
-                    new_line = ",".join(new_line)
-                    new_table_file.write(new_line + "\n")
-                    new_res_fields = row
-            new_line = [str(new_res_fields[i]) for i in field_index_list] #last row
-            new_line = ",".join(new_line)
-            new_table_file.write(new_line + "\n")
+                    if having_func(new_res_fields):
+                        new_line = ','.join(str(x) for x in new_res_fields) + '\n'
+                        new_table_file.write(new_line)
+                    new_res_fields = self.initiate_res_fields(row)
+
+            if having_func(new_res_fields):  # Last row
+                new_line = ','.join(str(x) for x in new_res_fields) + '\n'
+                new_table_file.write(new_line)
+
+        os.remove(order_by_result_file_name)
+        new_table_file.close()

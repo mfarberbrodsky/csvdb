@@ -1,54 +1,60 @@
 import csv
 import os
-from multiprocessing import Pool
 from Schema import Schema
+import functools
 
-chunk_size = 32768
-pool_size = os.cpu_count()
+chunk_size = 33554432
+
 
 class OrderBy:
-    def __init__(self, rootdir, field_list, table_name, order_by_list, file_name=None):
+    def __init__(self, rootdir, table_name, all_fields, order_by_list, file_name=None):
         if file_name is None:
             file_name = table_name + ".csv"
 
-        self.rootdir = rootdir
-        self.field_list = field_list
         self.file_name = os.path.join(rootdir, table_name, file_name)
-        self.file_size = os.path.getsize(self.file_name)
-        self.num_threads = os.cpu_count()
         if not os.path.isdir(os.path.join(rootdir, table_name, 'temp')):
             os.mkdir(os.path.join(rootdir, table_name, 'temp'))
         self.temp_file_dir = os.path.join(rootdir, table_name, 'temp')
-        self.order_by_list = order_by_list
-        self.schema = Schema(os.path.join(rootdir, table_name, 'table.json'))
 
-    def lexicographic_row(self, row):
-        type_to_func = {'int': int, 'float': float}
-        result = []
-        print (self.order_by_list)
-        for field, order in self.order_by_list:
-            field_index = self.schema.get_field_index(field)
-            field_type = self.schema.get_field_type(field)
-            if field_type == 'varchar':
-                if order == 'asc':
-                    result.append([ord(ch) for ch in row[field_index]])
-                else:
-                    result.append([-ord(ch) for ch in row[field_index]] + [float('inf')])
+        self.order_by_list = []
+        for field, order in order_by_list:
+            for f in all_fields:
+                if f.as_name == field:
+                    self.order_by_list.append((f.index, f.result_type, order))
+
+        self.type_to_func = {'int': int, 'float': float, 'varchar': (lambda x: x)}  # Used for compare_rows
+
+    # -1 if row1 < row2, 0 if row1 == row2, 1 if row1 > row2
+    def compare_rows(self, row1, row2):
+        if not row1 and not row2:
+            return 0
+        if not row1:
+            return 1 if 'asc' else -1
+        if not row2:
+            return -1 if 'asc' else 1
+
+        for index, field_type, order in self.order_by_list:
+            if row1[index] == row2[index]:
+                continue
+
+            if row1[index] == '':
+                result = True
+            elif row2[index] == '':
+                result = False
             else:
-                if row[field_index] == '':
-                    result.append(float('-inf'))
-                elif order == 'asc':
-                    result.append(type_to_func[field_type](row[field_index]))
-                else:
-                    result.append(-type_to_func[field_type](row[field_index]))
+                result = self.type_to_func[field_type](row1[index]) < self.type_to_func[field_type](row2[index])
 
-        return result
+            if order == 'asc':
+                return -1 if result else 1
+            else:
+                return 1 if result else -1
+        return 0
 
     def sort_chunk(self, i):
         with open(os.path.join(self.temp_file_dir, str(i).zfill(3) + '.chunk'), 'r') as f:
             chunk_lines = list(csv.reader(f))
         with open(os.path.join(self.temp_file_dir, str(i).zfill(3) + '.chunk'), 'w') as f:
-            chunk_lines.sort(key=self.lexicographic_row)
+            chunk_lines.sort(key=functools.cmp_to_key(self.compare_rows))
             csv.writer(f).writerows(chunk_lines)
 
     def merge_chunks(self, name1, name2, result_name):
@@ -64,9 +70,7 @@ class OrderBy:
         line2 = next(chunk2_reader)
 
         while True:
-            val1 = self.lexicographic_row(line1)
-            val2 = self.lexicographic_row(line2)
-            if val1 < val2:
+            if self.compare_rows(line1, line2) <= 0:
                 new_chunk_writer.writerow(line1)
                 try:
                     line1 = next(chunk1_reader)
@@ -91,7 +95,7 @@ class OrderBy:
         os.remove(os.path.join(self.temp_file_dir, name2))
         new_chunk.close()
 
-    def generate_temp_file(self):
+    def generate_temp_file(self):  # Writes result to temp file in directory self.temp_file_dir
         # Separate file to chunks
         file = open(self.file_name, 'rb')
         num_chunks = 0
@@ -115,8 +119,11 @@ class OrderBy:
             self.sort_chunk(i)
 
         # Merge chunks
-        to_merge = []
         files = os.listdir(self.temp_file_dir)
+
+        if 'group_by_file' in files:
+            files.remove('group_by_file')
+
         num_files = len(files)
         j = 1
         while num_files >= 2:

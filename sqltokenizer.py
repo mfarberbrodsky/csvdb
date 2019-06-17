@@ -1,4 +1,3 @@
-from __future__ import print_function
 import ast
 from enum import Enum
 import re
@@ -29,6 +28,7 @@ class SqlTokenizer(object):
         'where',
         'avg',
         'sum',
+        'count',
         'min',
         'max',
         'load',
@@ -63,9 +63,9 @@ class SqlTokenizer(object):
         ",",
         "(",
         ")",
-        "<",
         "<=",
         "<>",
+        "<",
         "=",
         ">=",
         ">",

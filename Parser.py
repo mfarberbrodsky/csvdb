@@ -16,15 +16,59 @@ class Parser:
         self.line, self.col = self.tokenizer.cur_text_location()
         self.token, self.val = self.tokenizer.next_token()
 
-    def expect_next_token(self, token, val=None):
+    def expect_next_token(self, token, val=None):  # Raises CSVDBSyntaxError
         self.next_token()
         self.expect_cur_token(token, val)
 
-    def expect_cur_token(self, token, val=None):
+    def expect_cur_token(self, token, val=None):  # Raises CSVDBSyntaxError
         if self.token != token:
             self.raise_error("Unexpected token: {}:{} (expecting {})".format(self.token, self.val, token))
         if val is not None and self.val != val:
             self.raise_error("Unexpected token value: " + str(self.val))
+
+    def parse_condition(self, is_having):
+        # Field
+        if not is_having:
+            self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+            field_name = self.val
+        else:
+            if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:  # No aggregator
+                field_name = self.val
+            else:  # Aggregator
+                self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
+                agg = self.val
+                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(")
+                self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
+                field_name = (agg, self.val)
+                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
+        self.next_token()
+
+        # Operator
+        if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:  # is / is not
+            self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER, 'is')
+            op = "is"
+            self.next_token()
+            if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'not':
+                op = "is not"
+                self.next_token()
+        else:  # other operator
+            self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR)
+            op = self.val
+            self.next_token()
+
+        # Value
+        if self.token == sqltokenizer.SqlTokenKind.KEYWORD:  # null
+            self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'null')
+            value = 'null'
+        elif self.token == sqltokenizer.SqlTokenKind.LIT_STR:  # string
+            value = self.val
+        else:  # number
+            self.expect_cur_token(sqltokenizer.SqlTokenKind.LIT_NUM)
+            value = self.val
+
+        self.next_token()
+
+        return field_name, op, value
 
     def parse_create(self):
         # Syntax:
@@ -40,28 +84,33 @@ class Parser:
         fields = []
         as_select = None
 
+        # Create table
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, "create")
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, "table")
         self.next_token()
 
+        # If not exists
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == "if":
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, "not")
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, "exists")
             if_not_exists = True
             self.next_token()
 
+        # Table name
         self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
 
         self.next_token()
 
-        if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'as':
+        if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'as':  # As select
             if if_not_exists:
                 self.raise_error("IF NOT EXISTS is not supported in CREATE AS SELECT")
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, "select")
             as_select = self.parse_select()
-        else:
+        else:  # Field list
             self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR, '(')
+
+            # First field
             self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
             field_name = self.val
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD)
@@ -92,15 +141,18 @@ class Parser:
         if_exists = False
         table_name = ""
 
+        # Drop table
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'drop')
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'table')
         self.next_token()
 
+        # If exists
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'if':
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'exists')
             if_exists = True
             self.next_token()
 
+        # Table name
         self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
@@ -117,17 +169,21 @@ class Parser:
         table_name = ""
         ignore_lines = 0
 
+        # Load data infile
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'load')
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'data')
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'infile')
         self.expect_next_token(sqltokenizer.SqlTokenKind.LIT_STR)
         infile_name = self.val
+
+        # Into table
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'into')
         self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'table')
         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
         self.next_token()
 
+        # Ignore ... lines
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'ignore':
             self.expect_next_token(sqltokenizer.SqlTokenKind.LIT_NUM)
             ignore_lines = self.val
@@ -156,41 +212,22 @@ class Parser:
         having = None
         order_by_list = []
 
+        # Select
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'select')
         self.next_token()
 
+        # Fields
         if self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == '*':
             field_list = ['*']
             self.next_token()
         else:
-            # self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            # field_list.append(self.val)
-            # self.next_token()
-            # while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
-            #     try:
-            #         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            #         field_list.append(self.val)
-            #     except:
-            #         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
-            #         agg = self.val
-            #         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(")
-            #         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            #         field_list.append((agg, self.val))
-            #         self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
-            #     self.next_token()
-            first = True
-            while first or (self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ','):
-                if first:
-                    first = False
-                else:
-                    self.next_token()
-
+            more_fields = True
+            while more_fields:
                 agg = None
-
-                if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:
+                if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:  # No aggregator
                     cur_name = self.val
                     self.next_token()
-                else:
+                else:  # Aggregator
                     self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
                     agg = self.val
                     self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, '(')
@@ -198,70 +235,45 @@ class Parser:
                     cur_name = self.val
                     self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ')')
                     self.next_token()
-                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'as')
 
-                output_name = cur_name
+                # As
+                output_name = None
                 if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'as':
                     self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
                     output_name = self.val
                     self.next_token()
 
-                if agg:
-                    field_list.append(((agg, cur_name), output_name))
-                else:
-                    field_list.append((cur_name, output_name))
+                field_list.append(NodeCommands.SelectField(cur_name, as_name=output_name, agg=agg))
+
+                more_fields = (self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',')
+                if more_fields:
+                    self.next_token()
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
+
+        # Into outfile
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'into':
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'outfile')
             self.expect_next_token(sqltokenizer.SqlTokenKind.LIT_STR)
             outfile_name = self.val
             self.next_token()
 
+        # From table
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'from')
         self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
         table_name = self.val
-
         self.next_token()
+
+        # Where
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'where':
-            self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            field_name = self.val
             self.next_token()
-            if self.token == sqltokenizer.SqlTokenKind.IDENTIFIER:
-                self.expect_cur_token(sqltokenizer.SqlTokenKind.IDENTIFIER, 'is')
-                op = self.val
-                self.next_token()
-                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'not':
-                    op = op + " " + self.val
-                    self.next_token()
-            else:
-                self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR)
-                op = self.val
-                self.next_token()
+            where = self.parse_condition(is_having=False)
 
-            if self.token == sqltokenizer.SqlTokenKind.KEYWORD:
-                self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD, 'null')
-                value = 'null'
-            elif self.token == sqltokenizer.SqlTokenKind.LIT_STR:
-                value = self.val
-            else:
-                self.expect_cur_token(sqltokenizer.SqlTokenKind.LIT_NUM)
-                value = self.val
-
-            # if op == 'is' or op == 'is not':
-            #     assert value == 'null'
-            # if op == '=':
-            #     assert value != 'null'
-            # if op == '<' or op == '<=' or op == '>' or op == '>=' or op == "<>":
-            #     assert isinstance(value, int) or isinstance(value, float)
-
-            self.next_token()
-
-            where = (field_name, op, value)
-
-        # self.next_token()
+        # Group by
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'group':
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'by')
+
+            # Fields
             self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
             group_by_list.append(self.val)
             self.next_token()
@@ -269,66 +281,41 @@ class Parser:
                 self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
                 group_by_list.append(self.val)
                 self.next_token()
+
+            # Having
             if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'having':
-                try:
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-                    having_field_name = self.val
-                except:
-                    self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
-                    agg = self.val
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, "(")
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-                    having_field_name = ((agg, self.val))
-                    self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR, ")")
-                self.expect_next_token(sqltokenizer.SqlTokenKind.OPERATOR)
-                having_op = self.val
-                self.expect_next_token(sqltokenizer.SqlTokenKind.LIT_NUM)
-                having_value = self.val
-
-                if having_op == '=':
-                    assert having_value != 'null'
-                if having_op == '<' or having_op == '<=' or having_op == '>' or having_op == '>=' or having_op == "<>":
-                    assert isinstance(having_value, int) or isinstance(having_value, float)
-
-                having = (having_field_name, having_op, having_value)
-
                 self.next_token()
+                having = self.parse_condition(is_having=True)
 
+        # Order by
         if self.token == sqltokenizer.SqlTokenKind.KEYWORD and self.val == 'order':
             self.expect_next_token(sqltokenizer.SqlTokenKind.KEYWORD, 'by')
-            self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
-            order_by_val = self.val
-            self.next_token()
-            if self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'desc'):
-                order_by_list.append((order_by_val, 'desc'))
-                self.next_token()
-            elif self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'asc'):
-                order_by_list.append((order_by_val, 'asc'))
-                self.next_token()
-            else:
-                order_by_list.append((order_by_val, 'asc'))
-            while self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ',':
+
+            more_fields = True
+            while more_fields:
+                # Field name
                 self.expect_next_token(sqltokenizer.SqlTokenKind.IDENTIFIER)
                 order_by_val = self.val
                 self.next_token()
-                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'desc'):
-                    order_by_list.append((order_by_val, 'desc'))
-                    self.next_token()
-                elif self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'asc'):
-                    order_by_list.append((order_by_val, 'asc'))
+
+                # Order by type
+                if self.token == sqltokenizer.SqlTokenKind.KEYWORD and (self.val == 'asc' or self.val == 'desc'):
+                    order_by_list.append((order_by_val, self.val))
                     self.next_token()
                 else:
                     order_by_list.append((order_by_val, 'asc'))
+                more_fields = self.token == sqltokenizer.SqlTokenKind.OPERATOR and self.val == ','
 
         self.expect_cur_token(sqltokenizer.SqlTokenKind.OPERATOR, ';')
 
         return NodeCommands.NodeSelect(field_list, outfile_name, table_name, where, group_by_list, having,
                                        order_by_list)
 
+    # Parses the next command, returns a NodeCommand object with the necessary details
     def parse_command(self):
         self.next_token()
 
-        if self.token == sqltokenizer.SqlTokenKind.EOF:
+        if self.token == sqltokenizer.SqlTokenKind.EOF:  # no more commands
             return None
         self.expect_cur_token(sqltokenizer.SqlTokenKind.KEYWORD)
 
@@ -341,5 +328,6 @@ class Parser:
         if self.val == 'select':
             return self.parse_select()
 
+    # Raises a CSVDBSyntaxError Error
     def raise_error(self, message):
         raise CSVDBErrors.CSVDBSyntaxError(message, self.line, self.col, self.text)
