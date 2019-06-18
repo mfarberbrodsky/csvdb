@@ -57,7 +57,10 @@ class GroupBy:
     def initiate_res_fields(self, row):
         result = row[:]
         for agg_func, index, type_func in self.aggregated_list:
-            result[index] = type_func(row[index])
+            if agg_func == 'avg':
+                result[index] = [1, type_func(row[index])]
+            else:
+                result[index] = type_func(row[index])
         return result
 
     def generate_temp_file(self):  # Writes result to temp file
@@ -77,14 +80,33 @@ class GroupBy:
             for row in reader:
                 if [row[i] for i in self.group_by_list] == [str(new_res_fields[i]) for i in self.group_by_list]:
                     for agg_func, index, type_func in self.aggregated_list:
-                        new_res_fields[index] = agg_func(new_res_fields[index], type_func(row[index]))
+                        if agg_func == 'avg':
+                            cnt_res = new_res_fields[index][0]
+                            sum_res = new_res_fields[index][1]
+                            new_res = type_func(row[index])
+                            new_res_fields[index] =\
+                                [agg_to_func['count'](cnt_res, new_res), agg_to_func['sum'](sum_res, new_res)]
+                        else:
+                            new_res_fields[index] = agg_func(new_res_fields[index], type_func(row[index]))
                 else:
+                    for agg_func, index, type_func in self.aggregated_list:
+                        if agg_func == 'avg':
+                            # new_res_fields[index] is a list includes two aggregators' results: count, sum
+                            cnt_res = new_res_fields[index][0]
+                            sum_res = new_res_fields[index][1]
+                            new_res_fields[index] = sum_res/cnt_res # cnt_res > 0
                     if having_func(new_res_fields):
                         new_line = ','.join(str(x) for x in new_res_fields) + '\n'
                         new_table_file.write(new_line)
                     new_res_fields = self.initiate_res_fields(row)
 
-            if having_func(new_res_fields):  # Last row
+            # Last row
+            for agg_func, index, type_func in self.aggregated_list:
+                if agg_func == 'avg':
+                    cnt_res = new_res_fields[index][0]
+                    sum_res = new_res_fields[index][1]
+                    new_res_fields[index] = sum_res/cnt_res # cnt_res > 0
+            if having_func(new_res_fields):
                 new_line = ','.join(str(x) for x in new_res_fields) + '\n'
                 new_table_file.write(new_line)
 
